@@ -1,0 +1,15 @@
+# Project Folders
+/aseprite/
+/build/
+/skia/
+/installer/
+/temp_ext/
+
+# Temporary Build Files
+*.zip
+*.iss
+*.log
+
+# Windows System Files
+Thumbs.db
+desktop.ini
