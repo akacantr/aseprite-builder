@@ -1,0 +1,81 @@
+name: Build Aseprite
+on:
+  workflow_dispatch: # Allows you to run this manually from the "Actions" tab
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          choco install cmake ninja innosetup
+
+      - name: Fetch Latest Aseprite Release
+        shell: powershell
+        run: |
+          $resp = (Invoke-WebRequest -UseBasicParsing https://api.github.com/repos/aseprite/aseprite/releases/latest).Content | ConvertFrom-Json
+          $url = $resp.assets | Where-Object { $_.name -like '*Source.zip' } | Select-Object -ExpandProperty browser_download_url
+          $ver = $resp.tag_name
+          echo "DOWNLOAD_URL=$url" >> $env:GITHUB_ENV
+          echo "ASE_VER=$ver" >> $env:GITHUB_ENV
+          echo "[+] Detected Version: $ver"
+
+      - name: Download and Extract Source
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri ${{ env.DOWNLOAD_URL }} -OutFile "aseprite_src.zip"
+          Expand-Archive -Path "aseprite_src.zip" -DestinationPath "aseprite"
+          # Move files out of the nested folder if necessary
+          $subfolder = Get-ChildItem -Path "aseprite" -Directory | Select-Object -First 1
+          Move-Item -Path "$($subfolder.FullName)\*" -Destination "aseprite" -Force
+          
+      - name: Download Skia
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/aseprite/skia/releases/latest/download/Skia-Windows-Release-x64.zip" -OutFile "skia.zip"
+          Expand-Archive -Path "skia.zip" -DestinationPath "skia"
+
+      - name: (MSVC) Initialize x64 Environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Run CMake
+        run: |
+          mkdir build
+          cd build
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLAF_BACKEND=skia -DSKIA_DIR=../skia -DSKIA_LIBRARY_DIR=../skia/out/Release-x64 -DSKIA_LIBRARY=../skia/out/Release-x64/skia.lib -DENABLE_UPDATER=OFF -DVERSION_OVERRIDE=${{ env.ASE_VER }} ../aseprite
+
+      - name: Compile with Ninja
+        run: |
+          cd build
+          ninja
+
+      - name: Create Installer (Inno Setup)
+        shell: powershell
+        run: |
+          $iss = @"
+          [Setup]
+          AppName=Aseprite
+          AppVersion=${{ env.ASE_VER }}
+          DefaultDirName={autopf}\Aseprite
+          DefaultGroupName=Aseprite
+          OutputBaseFilename=aseprite-setup-${{ env.ASE_VER }}
+          OutputDir=../installer
+          Compression=lzma
+          SolidCompression=yes
+          [Files]
+          Source: "build\bin\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+          [Icons]
+          Name: "{group}\Aseprite"; Filename: "{app}\aseprite.exe"
+          "@
+          mkdir installer
+          $iss | Out-File -FilePath "aseprite.iss" -Encoding utf8
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" aseprite.iss
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aseprite-Installer-${{ env.ASE_VER }}
+          path: installer/*.exe
