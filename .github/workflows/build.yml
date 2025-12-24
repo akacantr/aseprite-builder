@@ -6,7 +6,7 @@ jobs:
   build:
     runs-on: windows-latest
     permissions:
-      contents: read # Required to allow the token to read repo/API data
+      contents: read
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -22,13 +22,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Use the GITHUB_TOKEN to bypass rate limits
           $headers = @{ Authorization = "Bearer $env:GH_TOKEN" }
           $resp = (Invoke-WebRequest -UseBasicParsing -Headers $headers -Uri https://api.github.com/repos/aseprite/aseprite/releases/latest).Content | ConvertFrom-Json
-          
           $asset = $resp.assets | Where-Object { $_.name -like "*Source.zip" } | Select-Object -First 1
           if ($null -eq $asset) { throw "Could not find Source.zip asset" }
-          
           echo "DOWNLOAD_URL=$($asset.browser_download_url)" >> $env:GITHUB_ENV
           echo "ASE_VER=$($resp.tag_name)" >> $env:GITHUB_ENV
           echo "[+] Targeting Version: $($resp.tag_name)"
@@ -51,11 +48,28 @@ jobs:
       - name: Initialize MSVC Environment
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Run CMake
+      - name: Run CMake Configuration
+        shell: powershell
         run: |
-          mkdir build
-          cd build
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLAF_BACKEND=skia -DSKIA_DIR=../skia -DSKIA_LIBRARY_DIR=../skia/out/Release-x64 -DSKIA_LIBRARY=../skia/out/Release-x64/skia.lib -DENABLE_UPDATER=OFF -DVERSION_OVERRIDE=${{ env.ASE_VER }} ../aseprite
+          # Use absolute paths to prevent CMake directory confusion
+          $src = "$env:GITHUB_WORKSPACE\aseprite"
+          $build = "$env:GITHUB_WORKSPACE\build"
+          $skia = "$env:GITHUB_WORKSPACE\skia"
+          
+          if (!(Test-Path "$src\CMakeLists.txt")) { throw "Source not found at $src" }
+          
+          mkdir $build -ErrorAction SilentlyContinue
+          cd $build
+          
+          cmake -G Ninja `
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+            -DLAF_BACKEND=skia `
+            -DSKIA_DIR="$skia" `
+            -DSKIA_LIBRARY_DIR="$skia\out\Release-x64" `
+            -DSKIA_LIBRARY="$skia\out\Release-x64\skia.lib" `
+            -DENABLE_UPDATER=OFF `
+            -DVERSION_OVERRIDE="${{ env.ASE_VER }}" `
+            "$src"
 
       - name: Compile with Ninja
         run: |
