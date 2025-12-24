@@ -33,20 +33,21 @@ jobs:
       - name: Download & Extract Source
         shell: powershell
         run: |
-          # 1. Download
+          # 1. Download ZIP
           Invoke-WebRequest -Uri ${{ env.DOWNLOAD_URL }} -OutFile "aseprite_src.zip"
           
-          # 2. Extract to a temporary location
+          # 2. Extract to temp
           7z x "aseprite_src.zip" -o"temp_extraction"
           
-          # 3. Find the nested folder (e.g., Aseprite-v1.3.12-Source)
-          $nestedFolder = Get-ChildItem -Path "temp_extraction" -Directory | Select-Object -First 1
-          if ($null -eq $nestedFolder) { throw "Could not find nested folder in ZIP" }
+          # 3. Find the ACTUAL source root (where CMakeLists.txt lives)
+          $rootFile = Get-ChildItem -Path "temp_extraction" -Filter "CMakeLists.txt" -Recurse | Select-Object -First 1
+          if ($null -eq $rootFile) { throw "Could not find CMakeLists.txt in the extracted ZIP!" }
           
-          # 4. Move contents to the final 'aseprite' folder
+          # 4. Move that directory to 'aseprite'
+          $actualSourceDir = $rootFile.Directory.FullName
           mkdir aseprite
-          Move-Item -Path "$($nestedFolder.FullName)\*" -Destination "aseprite" -Force
-          echo "[+] Successfully moved source to /aseprite"
+          Move-Item -Path "$actualSourceDir\*" -Destination "aseprite" -Force
+          echo "[+] Moved source from $actualSourceDir to /aseprite"
 
       - name: Download & Extract Skia
         shell: powershell
@@ -64,10 +65,8 @@ jobs:
           $build = "$env:GITHUB_WORKSPACE\build"
           $skia = "$env:GITHUB_WORKSPACE\skia"
           
-          # Check if the file actually exists now
           if (!(Test-Path "$src\CMakeLists.txt")) { 
-            ls $src # List directory to debug if it still fails
-            throw "Source still not found at $src" 
+            throw "Source still not found at $src. Check logs for extraction errors." 
           }
           
           mkdir $build -ErrorAction SilentlyContinue
