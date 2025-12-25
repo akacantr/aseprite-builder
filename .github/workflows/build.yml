@@ -50,15 +50,11 @@ jobs:
       - name: Run CMake Configuration
         shell: powershell
         run: |
-          # FORCING ABSOLUTE PATHS TO FIX INTERFACE_INCLUDE_DIRECTORIES ERROR
           $abs_src = Join-Path $env:GITHUB_WORKSPACE "aseprite"
           $abs_skia = Join-Path $env:GITHUB_WORKSPACE "skia"
           $abs_build = Join-Path $env:GITHUB_WORKSPACE "build"
-          
           mkdir $abs_build -Force
           Set-Location $abs_build
-          
-          # We pass ONLY full absolute paths here. No ".." allowed.
           cmake -G Ninja `
             -DCMAKE_BUILD_TYPE=RelWithDebInfo `
             -DLAF_BACKEND=skia `
@@ -72,6 +68,16 @@ jobs:
         run: |
           cd build
           ninja
+
+      - name: Collect Dependencies (DLLs)
+        shell: powershell
+        run: |
+          # Copy OpenSSL DLLs to the bin folder so the app can run
+          $binDir = "$env:GITHUB_WORKSPACE\build\bin"
+          $sslDir = "C:\Program Files\OpenSSL\bin"
+          Copy-Item "$sslDir\libcrypto-3-x64.dll" -Destination $binDir -Force
+          Copy-Item "$sslDir\libssl-3-x64.dll" -Destination $binDir -Force
+          echo "[+] DLLs copied to $binDir"
 
       - name: Package Installer (Inno Setup)
         shell: powershell
