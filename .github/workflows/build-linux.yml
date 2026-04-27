@@ -4,15 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       aseprite_version:
-        description: 'Aseprite Release Tag (e.g., v1.3.2)'
+        description: 'Aseprite Release Tag (e.g., v1.3.17)'
         required: true
-        default: 'v1.3.2'
+        default: 'v1.3.17'
 
 jobs:
   build-linux:
     runs-on: ubuntu-latest
     env:
-      # This removes the Node.js 20 deprecation warning
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
@@ -30,8 +29,8 @@ jobs:
 
       - name: Download Skia (Linux)
         run: |
-          # Using a verified m124 release link to fix the 404 error
-          wget https://github.com/aseprite/skia/releases/download/m124-6014df6881/Skia-Linux-Release-x64-libstdc++.zip
+          # Using the stable m124-08a5439a6b release
+          wget https://github.com/aseprite/skia/releases/download/m124-08a5439a6b/Skia-Linux-Release-x64-libstdc++.zip
           unzip Skia-Linux-Release-x64-libstdc++.zip -d skia
 
       - name: Compile Aseprite
