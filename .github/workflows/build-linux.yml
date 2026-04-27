@@ -11,6 +11,9 @@ on:
 jobs:
   build-linux:
     runs-on: ubuntu-latest
+    env:
+      # This removes the Node.js 20 deprecation warning
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout Aseprite
@@ -27,7 +30,8 @@ jobs:
 
       - name: Download Skia (Linux)
         run: |
-          wget https://github.com/aseprite/skia/releases/download/m119-0a5bbd697b/Skia-Linux-Release-x64-libstdc++.zip
+          # Using a verified m124 release link to fix the 404 error
+          wget https://github.com/aseprite/skia/releases/download/m124-6014df6881/Skia-Linux-Release-x64-libstdc++.zip
           unzip Skia-Linux-Release-x64-libstdc++.zip -d skia
 
       - name: Compile Aseprite
@@ -48,7 +52,7 @@ jobs:
       - name: Build .deb Package
         run: |
           VERSION=${{ github.event.inputs.aseprite_version }}
-          VERSION_CLEAN=${VERSION#v} # Removes the 'v' for dpkg
+          VERSION_CLEAN=${VERSION#v}
           
           mkdir -p aseprite_deb/opt/aseprite
           mkdir -p aseprite_deb/usr/bin
